@@ -5,6 +5,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -48,6 +49,7 @@ func remoteCandidate(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// export PION_LOG_TRACE=all
 func main() { //nolint
 	var (
 		err  error
@@ -97,6 +99,7 @@ func main() { //nolint
 			return
 		}
 
+		log.Printf("local candidate is : %s\n", c)
 		_, err = http.PostForm(fmt.Sprintf("http://localhost:%d/remoteCandidate", remoteHTTPPort), //nolint
 			url.Values{
 				"candidate": {c.Marshal()},
@@ -133,6 +136,7 @@ func main() { //nolint
 	remoteUfrag := <-remoteAuthChannel
 	remotePwd := <-remoteAuthChannel
 
+	// todo 收集自身的candidate，然后将自身candidate，发送给对方
 	if err = iceAgent.GatherCandidates(); err != nil {
 		panic(err)
 	}

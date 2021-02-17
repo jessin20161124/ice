@@ -83,12 +83,12 @@ func (s *controllingSelector) nominatePair(pair *candidatePair) {
 		s.log.Error(err.Error())
 		return
 	}
-
-	s.log.Tracef("ping STUN (nominate candidate pair) from %s to %s\n", pair.local.String(), pair.remote.String())
+	s.log.Infof("任命 (nominate candidate pair) from %s to %s\n", pair.local.String(), pair.remote.String())
 	s.agent.sendBindingRequest(msg, pair.local, pair.remote)
 }
 
 func (s *controllingSelector) HandleBindingRequest(m *stun.Message, local, remote Candidate) {
+	// todo 发送binding success response
 	s.agent.sendBindingSuccess(m, local, remote)
 
 	p := s.agent.findPair(local, remote)
@@ -112,6 +112,7 @@ func (s *controllingSelector) HandleBindingRequest(m *stun.Message, local, remot
 }
 
 func (s *controllingSelector) HandleSuccessResponse(m *stun.Message, local, remote Candidate, remoteAddr net.Addr) {
+	// todo 根据transactionID找到对应的发送出去的request，并删除掉
 	ok, pendingRequest := s.agent.handleInboundBindingSuccess(m.TransactionID)
 	if !ok {
 		s.log.Warnf("discard message from (%s), unknown TransactionID 0x%x", remote, m.TransactionID)
@@ -127,7 +128,7 @@ func (s *controllingSelector) HandleSuccessResponse(m *stun.Message, local, remo
 		return
 	}
 
-	s.log.Tracef("inbound STUN (SuccessResponse) from %s to %s", remote.String(), local.String())
+	s.log.Tracef("inbound STUN (SuccessResponse:%s) from %s to %s", m.TransactionID, remote.String(), local.String())
 	p := s.agent.findPair(local, remote)
 
 	if p == nil {
@@ -138,6 +139,7 @@ func (s *controllingSelector) HandleSuccessResponse(m *stun.Message, local, remo
 
 	p.state = CandidatePairStateSucceeded
 	s.log.Tracef("Found valid candidate pair: %s", p)
+	// todo 默认pendingRequest.isUseCandidate = false
 	if pendingRequest.isUseCandidate && s.agent.getSelectedPair() == nil {
 		s.agent.setSelectedPair(p)
 	}
@@ -156,6 +158,7 @@ func (s *controllingSelector) PingCandidate(local, remote Candidate) {
 		return
 	}
 
+	// todo local给remote发送candidate stun bind请求
 	s.agent.sendBindingRequest(msg, local, remote)
 }
 
@@ -178,6 +181,7 @@ func (s *controlledSelector) ContactCandidates() {
 	}
 }
 
+// todo userName为remote:local，接收到时就是local:remote
 func (s *controlledSelector) PingCandidate(local, remote Candidate) {
 	msg, err := stun.Build(stun.BindingRequest, stun.TransactionID,
 		stun.NewUsername(s.agent.remoteUfrag+":"+s.agent.localUfrag),

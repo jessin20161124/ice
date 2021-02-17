@@ -349,6 +349,7 @@ func NewAgent(config *AgentConfig) (*Agent, error) { //nolint:gocognit
 	go a.taskLoop()
 	a.startOnConnectionStateChangeRoutine()
 
+	// todo restart时，初始化ufrag和pwd
 	// Restart is also used to initialize the agent for the first time
 	if err := a.Restart(config.LocalUfrag, config.LocalPwd); err != nil {
 		closeMDNSConn()
@@ -422,6 +423,7 @@ func (a *Agent) startOnConnectionStateChangeRoutine() {
 				a.onConnectionStateChange(s)
 
 			case c, isOpen := <-a.chanCandidate:
+				// 已经关闭了
 				if !isOpen {
 					for s := range a.chanState {
 						a.onConnectionStateChange(s)
@@ -584,6 +586,7 @@ func (a *Agent) setSelectedPair(p *candidatePair) {
 	}
 
 	// Signal connected
+	// todo 唤醒连接成功
 	a.onConnectedOnce.Do(func() { close(a.onConnected) })
 }
 
@@ -804,8 +807,10 @@ func (a *Agent) addRemoteCandidate(c Candidate) {
 	a.requestConnectivityCheck()
 }
 
+// todo 添加本地candidate时，会开启udp端口监听，同时跟所有已存在的remote candidate，构成一个pair，添加到checkList中。
 func (a *Agent) addCandidate(ctx context.Context, c Candidate, candidateConn net.PacketConn) error {
 	return a.run(ctx, func(ctx context.Context, agent *Agent) {
+		// todo candidateConn已经开启了端口监听
 		c.start(a, candidateConn, a.startedCh)
 
 		set := a.localCandidates[c.NetworkType()]
@@ -819,6 +824,7 @@ func (a *Agent) addCandidate(ctx context.Context, c Candidate, candidateConn net
 		}
 
 		set = append(set, c)
+		// todo 添加到localCandidates中
 		a.localCandidates[c.NetworkType()] = set
 
 		if remoteCandidates, ok := a.remoteCandidates[c.NetworkType()]; ok {
@@ -944,7 +950,7 @@ func (a *Agent) findRemoteCandidate(networkType NetworkType, addr net.Addr) Cand
 }
 
 func (a *Agent) sendBindingRequest(m *stun.Message, local, remote Candidate) {
-	a.log.Tracef("ping STUN from %s to %s\n", local.String(), remote.String())
+	a.log.Tracef("ping STUN(%s) from %s to %s\n", m.TransactionID, local.String(), remote.String())
 
 	a.invalidatePendingBindingRequests(time.Now())
 	a.pendingBindingRequests = append(a.pendingBindingRequests, bindingRequest{
@@ -953,6 +959,7 @@ func (a *Agent) sendBindingRequest(m *stun.Message, local, remote Candidate) {
 		destination:    remote.addr(),
 		isUseCandidate: m.Contains(stun.AttrUseCandidate),
 	})
+
 
 	a.sendSTUN(m, local, remote)
 }
@@ -1032,10 +1039,12 @@ func (a *Agent) handleInbound(m *stun.Message, local Candidate, remote net.Addr)
 	}
 
 	if a.isControlling {
+		// todo 本地是controlling，远程进来的inbound请求不能是controlling
 		if m.Contains(stun.AttrICEControlling) {
 			a.log.Debug("inbound isControlling && a.isControlling == true")
 			return
 		} else if m.Contains(stun.AttrUseCandidate) {
+			// todo controlled不能给controlling发送use candidate
 			a.log.Debug("useCandidate && a.isControlling == true")
 			return
 		}
@@ -1048,6 +1057,7 @@ func (a *Agent) handleInbound(m *stun.Message, local Candidate, remote net.Addr)
 
 	remoteCandidate := a.findRemoteCandidate(local.NetworkType(), remote)
 	if m.Type.Class == stun.ClassSuccessResponse {
+		// todo response 发送的是自己的密码(取签名）
 		if err = assertInboundMessageIntegrity(m, []byte(a.remotePwd)); err != nil {
 			a.log.Warnf("discard message from (%s), %v", remote, err)
 			return
@@ -1060,6 +1070,7 @@ func (a *Agent) handleInbound(m *stun.Message, local Candidate, remote net.Addr)
 
 		a.selector.HandleSuccessResponse(m, local, remoteCandidate, remote)
 	} else if m.Type.Class == stun.ClassRequest {
+		// todo bind request中，传递过来的必须是对方的ufrag和passwd(取签名)，否则直接丢弃掉
 		if err = assertInboundUsername(m, a.localUfrag+":"+a.remoteUfrag); err != nil {
 			a.log.Warnf("discard message from (%s), %v", remote, err)
 			return
@@ -1176,9 +1187,11 @@ func (a *Agent) Restart(ufrag, pwd string) error {
 		}
 	}
 
+	// ufrag三个字节
 	if len([]rune(ufrag))*8 < 24 {
 		return ErrLocalUfragInsufficientBits
 	}
+	// pwd 16个字节
 	if len([]rune(pwd))*8 < 128 {
 		return ErrLocalPwdInsufficientBits
 	}

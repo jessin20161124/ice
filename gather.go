@@ -86,6 +86,7 @@ func (a *Agent) gatherCandidates(ctx context.Context) {
 	}
 
 	var wg sync.WaitGroup
+	// todo 默认三种类型的candidate
 	for _, t := range a.candidateTypes {
 		switch t {
 		case CandidateTypeHost:
@@ -140,6 +141,7 @@ func (a *Agent) gatherCandidatesLocal(ctx context.Context, networkTypes []Networ
 		return
 	}
 
+	// todo host类型的candidate，根据本地ip（可以替换为外网ip)，以及需要的网络类型（tcp/udp)，随机找到一个端口，构建一个candidate
 	for _, ip := range localIPs {
 		mappedIP := ip
 		if a.mDNSMode != MulticastDNSModeQueryAndGather && a.extIPMapper != nil && a.extIPMapper.candidateType == CandidateTypeHost {
@@ -152,6 +154,7 @@ func (a *Agent) gatherCandidatesLocal(ctx context.Context, networkTypes []Networ
 
 		address := mappedIP.String()
 		if a.mDNSMode == MulticastDNSModeQueryAndGather {
+			// todo 可以替换为一个域名
 			address = a.mDNSName
 		}
 
@@ -178,6 +181,7 @@ func (a *Agent) gatherCandidatesLocal(ctx context.Context, networkTypes []Networ
 				// is there a way to verify that the listen address is even
 				// accessible from the current interface.
 			case udp:
+				// todo 随机找到一个udp port并监听
 				conn, err = listenUDPInPortRange(a.net, a.log, int(a.portmax), int(a.portmin), network, &net.UDPAddr{IP: ip, Port: 0})
 				if err != nil {
 					a.log.Warnf("could not listen %s %s\n", network, ip)
@@ -238,6 +242,7 @@ func (a *Agent) gatherCandidatesSrflxMapped(ctx context.Context, networkTypes []
 
 			laddr := conn.LocalAddr().(*net.UDPAddr)
 			mappedIP, err := a.extIPMapper.findExternalIP(laddr.IP.String())
+			a.log.Infof("gatherCandidatesSrflxMapped ip : %s, %#v", mappedIP, err)
 			if err != nil {
 				closeConnAndLog(conn, a.log, fmt.Sprintf("1:1 NAT mapping is enabled but no external IP is found for %s\n", laddr.IP.String()))
 				return
@@ -296,7 +301,7 @@ func (a *Agent) gatherCandidatesSrflx(ctx context.Context, urls []*URL, networkT
 					closeConnAndLog(conn, a.log, fmt.Sprintf("Failed to listen for %s: %v\n", serverAddr.String(), err))
 					return
 				}
-
+				// todo 通过给对应的stun服务器发送stun请求，获得对应的外部ip和外部端口
 				xoraddr, err := getXORMappedAddr(conn, serverAddr, stunGatherTimeout)
 				if err != nil {
 					closeConnAndLog(conn, a.log, fmt.Sprintf("could not get server reflexive address %s %s: %v\n", network, url, err))

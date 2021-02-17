@@ -219,7 +219,10 @@ func (c *candidateBase) recvLoop(initializedCh <-chan struct{}) {
 	log := c.agent().log
 	buffer := make([]byte, receiveMTU)
 	for {
+		// todo src addr为远程客户端的ip
 		n, srcAddr, err := c.conn.ReadFrom(buffer)
+		log.Infof("get data from remote %s", srcAddr)
+
 		if err != nil {
 			return
 		}
@@ -240,6 +243,7 @@ func handleInboundCandidateMsg(ctx context.Context, c Candidate, buffer []byte, 
 			return
 		}
 		err := c.agent().run(ctx, func(ctx context.Context, agent *Agent) {
+			// todo 处理stun请求
 			agent.handleInbound(m, c, srcAddr)
 		})
 		if err != nil {
@@ -254,6 +258,7 @@ func handleInboundCandidateMsg(ctx context.Context, c Candidate, buffer []byte, 
 		return
 	}
 
+	// todo 获取到远程客户端的发送过来的数据，暂时写入到buffer中
 	// NOTE This will return packetio.ErrFull if the buffer ever manages to fill up.
 	if _, err := c.agent().buffer.Write(buffer); err != nil {
 		log.Warnf("failed to write packet")
