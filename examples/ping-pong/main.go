@@ -72,9 +72,16 @@ func remoteCandidate(w http.ResponseWriter, r *http.Request) {
 	if err := iceAgent.AddRemoteCandidate(c); err != nil {
 		panic(err)
 	}
-	localCandidate := <-localCandidateChannel
-	data := &CandidateInfo{Candidate: localCandidate}
-	json.NewEncoder(w).Encode(data)
+	select {
+	case localCandidate := <-localCandidateChannel:
+		data := &CandidateInfo{Candidate: localCandidate}
+		json.NewEncoder(w).Encode(data)
+	case <-time.After(1 * time.Second):
+		localCandidate := ""
+		data := &CandidateInfo{Candidate: localCandidate}
+		json.NewEncoder(w).Encode(data)
+		log.Printf("no local candidate")
+	}
 }
 
 // go run main.go -server
@@ -91,6 +98,7 @@ func main() { //nolint
 	remoteAuthChannel = make(chan string, 3)
 	localCandidateChannel = make(chan string)
 
+	//	remoteHTTPHost = "1.15.130.58:9001"
 	remoteHTTPHost = "localhost:9001"
 	remoteHTTPPort = 9001
 
@@ -130,8 +138,8 @@ func client() { //nolint
 		if c == nil {
 			return
 		}
-
 		log.Printf("local candidate is : %s\n", c)
+
 		resp, err := http.PostForm(fmt.Sprintf("http://%s/remoteCandidate", remoteHTTPHost), //nolint
 			url.Values{
 				"candidate": {c.Marshal()},
@@ -150,13 +158,17 @@ func client() { //nolint
 			panic(err)
 		}
 
-		remoteCandidate, err := ice.UnmarshalCandidate(candidate.Candidate)
-		if err != nil {
-			panic(err)
-		}
-
-		if err := iceAgent.AddRemoteCandidate(remoteCandidate); err != nil {
-			panic(err)
+		if candidate.Candidate != "" {
+			remoteCandidate, err := ice.UnmarshalCandidate(candidate.Candidate)
+			if err != nil {
+				panic(err)
+			}
+			if err := iceAgent.AddRemoteCandidate(remoteCandidate); err != nil {
+				panic(err)
+			}
+			log.Printf("local candidate is : %s, remote candidate is %s\n", c, remoteCandidate)
+		} else {
+			log.Printf("local candidate is : %s, remote candidate is empty\n", c)
 		}
 	}); err != nil {
 		panic(err)
@@ -195,6 +207,7 @@ func client() { //nolint
 
 	remoteUfrag := candidate.Ufrag
 	remotePwd := candidate.Pwd
+	log.Printf("remote ufrag pwd is : %s,%s\n", remoteUfrag, remotePwd)
 
 	// todo 收集自身的candidate，然后将自身candidate，发送给对方
 	if err = iceAgent.GatherCandidates(); err != nil {
