@@ -98,8 +98,8 @@ func main() { //nolint
 	remoteAuthChannel = make(chan string, 3)
 	localCandidateChannel = make(chan string)
 
-	//	remoteHTTPHost = "1.15.130.58:9001"
-	remoteHTTPHost = "localhost:9001"
+	remoteHTTPHost = "1.15.130.58:9001"
+	//remoteHTTPHost = "localhost:9001"
 	remoteHTTPPort = 9001
 
 	if isServer {
@@ -279,6 +279,7 @@ func server() { //nolint
 
 	iceAgent, err = ice.NewAgent(&ice.AgentConfig{
 		NetworkTypes: []ice.NetworkType{ice.NetworkTypeUDP4},
+		NAT1To1IPs:[]string{"1.15.130.58"},
 	})
 	if err != nil {
 		panic(err)
